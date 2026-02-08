@@ -797,3 +797,204 @@ class UserServiceTest {
 - Refactor tests when underlying changes are significant
 - Ensure all tests remain passing and independent
 - Update test double configurations when dependencies change
+
+## Troubleshooting Common Test Issues
+
+### Mock Not Being Injected
+
+**Symptoms:** NullPointerException when calling mocked dependencies
+
+**Solutions:**
+- Ensure class has `@ExtendWith(MockitoExtension.class)`
+- Verify `@Mock` annotation on dependencies
+- Verify `@InjectMocks` annotation on class under test
+- Check that the class under test has a constructor or fields that can be injected
+- Ensure mock field names match the dependency names in the class under test
+
+**Example:**
+```java
+@ExtendWith(MockitoExtension.class)  // ✓ Required for mock initialization
+class UserServiceTest {
+    
+    @Mock  // ✓ Creates mock
+    private UserRepository userRepository;
+    
+    @InjectMocks  // ✓ Injects mocks into UserService
+    private UserService userService;
+    
+    @Test
+    void test() {
+        // userRepository is now properly injected into userService
+    }
+}
+```
+
+### Tests Pass Locally But Fail in CI
+
+**Symptoms:** Tests succeed on local machine but fail in CI pipeline
+
+**Common causes and solutions:**
+- **Shared state between tests**: Ensure `@BeforeEach` properly cleans up state
+- **Timing issues**: Use proper await mechanisms instead of `Thread.sleep()`
+- **Environment differences**: Use Testcontainers for consistent infrastructure
+- **Test execution order**: Tests should not depend on execution order
+- **Random data**: Use `Instancio` with fixed seeds for reproducibility
+
+**Example fix:**
+```java
+@BeforeEach
+void setUp() {
+    // ✓ Clean state before each test
+    userRepository.deleteAll();
+}
+
+@Test
+void testWithDeterministicData() {
+    // ✓ Use Instancio with constraints for predictable data
+    User user = Instancio.of(User.class)
+        .set(field("email"), "test@example.com")
+        .create();
+}
+```
+
+### Flaky Tests
+
+**Symptoms:** Tests randomly fail and succeed without code changes
+
+**Common causes and solutions:**
+- **Timing issues**: Use proper synchronization mechanisms
+- **Uncontrolled randomness**: Use fixed seeds or controlled data generation
+- **Shared mutable state**: Ensure test isolation
+- **External dependencies**: Use mocks or test doubles instead of real services
+- **Incorrect assertions on collections**: Use order-independent assertions
+
+**Example fixes:**
+```java
+// ❌ BAD - Timing assumption
+@Test
+void testAsyncOperation() throws Exception {
+    service.startAsyncOperation();
+    Thread.sleep(1000);  // Brittle!
+    assertTrue(service.isComplete());
+}
+
+// ✅ GOOD - Proper waiting mechanism
+@Test
+void testAsyncOperation() {
+    service.startAsyncOperation();
+    await().atMost(5, SECONDS).until(() -> service.isComplete());
+}
+
+// ❌ BAD - Order-dependent assertion
+@Test
+void testGetUsers() {
+    List<User> users = service.getUsers();
+    assertEquals(users.get(0).getName(), "Alice");  // Fails if order changes
+}
+
+// ✅ GOOD - Order-independent assertion
+@Test
+void testGetUsers() {
+    List<User> users = service.getUsers();
+    assertThat(users)
+        .extracting(User::getName)
+        .containsExactlyInAnyOrder("Alice", "Bob", "Charlie");
+}
+```
+
+### Slow Tests
+
+**Symptoms:** Test execution takes too long, slowing down development
+
+**Common causes and solutions:**
+- **Unnecessary `@SpringBootTest`**: Use test slices (`@WebMvcTest`, `@DataJpaTest`) instead
+- **Real database in unit tests**: Use mocks instead of real database
+- **Starting unnecessary infrastructure**: Mock external services
+- **Inefficient test data creation**: Use Instancio for efficient object creation
+- **Not using test parallelization**: Configure Maven/Gradle for parallel execution
+
+**Example fixes:**
+```java
+// ❌ BAD - Full application context for controller test (slow)
+@SpringBootTest
+class UserControllerTest {
+    // Starts entire application
+}
+
+// ✅ GOOD - Test slice for controller test (fast)
+@WebMvcTest(UserController.class)
+class UserControllerTest {
+    // Only starts web layer
+    @MockBean
+    private UserService userService;  // Mock the service layer
+}
+
+// ❌ BAD - Real database for unit test (slow)
+@SpringBootTest
+class UserServiceTest {
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private UserRepository userRepository;  // Real database
+}
+
+// ✅ GOOD - Mocked repository for unit test (fast)
+@ExtendWith(MockitoExtension.class)
+class UserServiceTest {
+    @Mock
+    private UserRepository userRepository;  // Mocked dependency
+    
+    @InjectMocks
+    private UserService userService;
+}
+```
+
+### Assertion Failures with Unclear Messages
+
+**Symptoms:** Test fails but the error message doesn't explain what went wrong
+
+**Solution:** Use AssertJ with descriptive messages and specific assertions
+
+**Example:**
+```java
+// ❌ BAD - Unclear failure message
+@Test
+void testUser() {
+    User user = userService.getUser(1L);
+    assertTrue(user.getAge() >= 18);  // Failure: expected true but was false
+}
+
+// ✅ GOOD - Clear failure message
+@Test
+void testUser() {
+    User user = userService.getUser(1L);
+    assertThat(user.getAge())
+        .as("User must be 18 or older")
+        .isGreaterThanOrEqualTo(18);  // Failure: User must be 18 or older, expected >=18 but was 16
+}
+```
+
+### Cannot Verify Mock Interactions
+
+**Symptoms:** `verify()` fails even though the method was called
+
+**Common causes and solutions:**
+- **Wrong argument matchers**: Ensure consistent matcher usage
+- **Object equality issues**: Use `eq()` for exact matching or `any()` for flexible matching
+- **Method not actually called**: Debug to confirm execution path
+- **Verification timing**: Ensure verification happens after the actual call
+
+**Example:**
+```java
+// ❌ BAD - Mixing matchers and concrete values incorrectly
+verify(userRepository).save(1L, any(User.class));  // Fails!
+
+// ✅ GOOD - Consistent matcher usage
+verify(userRepository).save(eq(1L), any(User.class));
+
+// ✅ ALTERNATIVE - All concrete values
+verify(userRepository).save(1L, expectedUser);
+```
+
+
