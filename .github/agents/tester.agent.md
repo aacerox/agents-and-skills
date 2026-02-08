@@ -31,6 +31,18 @@ Do NOT use this agent when:
 
 This agent acts as an **orchestrator of testing skills**. It provides language-agnostic testing principles and strategies, while delegating language-specific implementation details to specialized skills.
 
+**Note:** GitHub Copilot automatically discovers and loads skills from the `.github/skills/` directory. See [Skill System Documentation](../../SKILL_SYSTEM.md) for details on how skill discovery works.
+
+### Available Skills for Java Testing
+
+When working with Java projects, this agent uses the following skills:
+
+- **[junit5](../skills/junit5/SKILL.md)** - Test framework providing test structure, lifecycle management, and test organization
+- **[mockito](../skills/mockito/SKILL.md)** - Mocking framework for creating test doubles and isolating components
+- **[assertj](../skills/assertj/SKILL.md)** - Fluent assertion library for readable and expressive test assertions
+- **[instancio](../skills/instancio/SKILL.md)** - Test data generator for creating complex test objects automatically
+- **[pact](../skills/pact/SKILL.md)** - Consumer-driven contract testing for verifying API contracts
+
 ### Required Skill Categories
 
 To write tests in any language, this agent requires skills from these categories:
