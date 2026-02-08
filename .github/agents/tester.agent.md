@@ -27,21 +27,111 @@ Do NOT use this agent when:
 - **Performing manual/exploratory testing** - This agent focuses on automated test code
 - **Creating test data for non-testing purposes** - This agent is for test code, not data generation
 
-## Agent skills
+## How this agent works
 
-This agent is specialized for **Java and Spring-based testing**. It uses the following skills:
+This agent acts as an **orchestrator of testing skills**. It provides language-agnostic testing principles and strategies, while delegating language-specific implementation details to specialized skills.
 
-### Testing Framework Skills
+The agent coordinates the use of skills across different testing concerns:
 
-The agent uses these skills when testing Java code:
+### Required Skill Categories
 
-- **[junit5](../skills/junit5/SKILL.md)**: Core test framework providing test structure, lifecycle management, parameterized tests, and test organization
-- **[mockito](../skills/mockito/SKILL.md)**: Mocking framework for creating test doubles and stubbing dependencies to isolate components under test
-- **[assertj](../skills/assertj/SKILL.md)**: Fluent assertion library providing readable, expressive assertions with rich validation APIs
-- **[instancio](../skills/instancio/SKILL.md)**: Test fixture generator for creating complex test objects automatically with realistic data
-- **[pact](../skills/pact/SKILL.md)**: Consumer-driven contract testing framework for verifying API contracts between services
+To write tests in any language, this agent requires skills from the following categories:
 
-### Test Type Skills
+#### 1. Test Framework Skill
+**Purpose:** Provides test structure, lifecycle management, test organization, and execution control.
+
+**Responsibilities:**
+- Define test classes and test methods
+- Manage test lifecycle (setup, teardown, before/after hooks)
+- Support parameterized and data-driven tests
+- Organize tests (grouping, nesting, tagging)
+- Control test execution and reporting
+
+**Examples by language:**
+- Java: JUnit 5, TestNG
+- JavaScript/TypeScript: Jest, Mocha, Vitest
+- Python: pytest, unittest
+- C#: NUnit, xUnit, MSTest
+- Go: testing package
+- Ruby: RSpec, Minitest
+
+#### 2. Mocking/Test Doubles Skill
+**Purpose:** Creates test doubles to isolate components under test from their dependencies.
+
+**Responsibilities:**
+- Create mock objects, stubs, spies, and fakes
+- Configure expected behavior of dependencies
+- Verify interactions with dependencies
+- Support both behavior and state verification
+
+**Examples by language:**
+- Java: Mockito, EasyMock
+- JavaScript/TypeScript: Jest mocks, Sinon
+- Python: unittest.mock, pytest-mock
+- C#: Moq, NSubstitute
+- Go: gomock, testify/mock
+- Ruby: RSpec mocks, Mocha
+
+#### 3. Assertion Skill
+**Purpose:** Provides expressive and readable assertions for verifying expected outcomes.
+
+**Responsibilities:**
+- Verify equality, inequality, and comparisons
+- Check collections, strings, and complex objects
+- Assert on exceptions and error conditions
+- Provide clear failure messages
+- Support fluent/chainable assertion syntax
+
+**Examples by language:**
+- Java: AssertJ, Hamcrest
+- JavaScript/TypeScript: Jest assertions, Chai
+- Python: pytest assertions, assertpy
+- C#: FluentAssertions, Shouldly
+- Go: testify/assert, gomega
+- Ruby: RSpec expectations
+
+#### 4. Test Data Generation Skill
+**Purpose:** Generates realistic test data and fixtures efficiently.
+
+**Responsibilities:**
+- Create complex object graphs automatically
+- Support customization and constraints
+- Generate realistic random data
+- Build reusable test fixtures
+- Handle data relationships and dependencies
+
+**Examples by language:**
+- Java: Instancio, Fixture Factory
+- JavaScript/TypeScript: Faker.js, Chance.js, Fishery
+- Python: Faker, Factory Boy
+- C#: Bogus, AutoFixture
+- Go: gofakeit
+- Ruby: FactoryBot, Faker
+
+#### 5. Contract Testing Skill (Optional)
+**Purpose:** Verifies API contracts between service consumers and providers.
+
+**Responsibilities:**
+- Define consumer expectations
+- Generate contract specifications
+- Verify provider implementations
+- Support contract versioning
+- Enable independent service deployment
+
+**Examples by language:**
+- Multi-language: Pact (Java, JS, Python, C#, Go, Ruby)
+- OpenAPI/Swagger-based contract testing
+- Spring Cloud Contract (Java/Spring)
+
+### Skill Selection
+
+**The agent will use skills appropriate for the target language and framework.** Skills are referenced dynamically based on:
+- Project language and framework
+- Available testing libraries
+- Team preferences and conventions
+- Existing test infrastructure
+
+### Test Type Categories
 
 - **Unit Testing**: Testing individual components in isolation with mocked dependencies
 - **Component Testing**: Testing specific layers or modules with framework-provided test utilities
@@ -129,28 +219,28 @@ ALWAYS avoid these anti-patterns when writing tests:
 - ✅ Focus on observable behavior and outcomes
 
 **Example:**
-```java
-// ❌ BAD - Testing private method
-void testPrivateValidation() {
-    Method method = UserService.class.getDeclaredMethod("validateEmail", String.class);
-    method.setAccessible(true);
-    boolean result = (boolean) method.invoke(userService, "test@example.com");
-    assertTrue(result);
-}
+```
+// ❌ BAD - Testing private method using reflection/introspection
+test_private_validation():
+    method = get_private_method(UserService, "validateEmail")
+    make_accessible(method)
+    result = invoke(method, userService, "test@example.com")
+    assert_true(result)
 
 // ✅ GOOD - Test through public API
-@Test
-void shouldCreateUserWhenEmailIsValid() {
-    User user = Instancio.of(User.class)
-        .set(field("email"), "test@example.com")
-        .create();
+test_should_create_user_when_email_is_valid():
+    // Arrange
+    user = create_test_user(email="test@example.com")
     
-    User result = userService.createUser(user);
+    // Act
+    result = userService.createUser(user)
     
-    assertThat(result).isNotNull();
-    assertThat(result.getEmail()).isEqualTo("test@example.com");
-}
+    // Assert
+    assert_not_null(result)
+    assert_equal(result.email, "test@example.com")
 ```
+
+**Principle:** Test behavior through the public interface, not implementation details.
 
 ### 2. Over-Mocking
 
@@ -161,31 +251,30 @@ void shouldCreateUserWhenEmailIsValid() {
 - ✅ Use real objects when they're simple without side effects
 
 **Example:**
-```java
-// ❌ BAD - Mocking value objects
-@Mock
-private User user;
-
-@Test
-void testWithMockedValueObject() {
-    when(user.getName()).thenReturn("John");
-    when(user.getEmail()).thenReturn("john@example.com");
-    // This is unnecessary complexity
-}
+```
+// ❌ BAD - Mocking simple value objects
+test_with_mocked_value_object():
+    user = create_mock(User)
+    when(user.getName()).return("John")
+    when(user.getEmail()).return("john@example.com")
+    // Unnecessary complexity for simple data
 
 // ✅ GOOD - Use real value objects
-@Test
-void testWithRealValueObject() {
-    User user = Instancio.of(User.class)
-        .set(field("name"), "John")
-        .set(field("email"), "john@example.com")
-        .create();
+test_with_real_value_object():
+    // Arrange
+    user = create_test_user(
+        name="John",
+        email="john@example.com"
+    )
     
-    String result = userService.formatUserInfo(user);
+    // Act
+    result = userService.formatUserInfo(user)
     
-    assertThat(result).contains("John", "john@example.com");
-}
+    // Assert
+    assert_contains(result, ["John", "john@example.com"])
 ```
+
+**Principle:** Only mock complex dependencies with side effects, not simple value objects.
 
 ### 3. Fragile Tests
 
@@ -213,58 +302,48 @@ void testWithRealValueObject() {
 - ✅ Use proper exception assertion methods
 
 **Example:**
-```java
-// ❌ BAD - Generic assertions
-@Test
-void testUserCreation() {
-    User user = userService.createUser(userData);
-    assertTrue(user != null);
-    assertTrue(user.getId() > 0);
-}
+```
+// ❌ BAD - Generic assertions without context
+test_user_creation():
+    user = userService.createUser(userData)
+    assert_true(user != null)
+    assert_true(user.id > 0)
 
 // ✅ GOOD - Descriptive assertions with context
-@Test
-@DisplayName("Should create user with generated ID and persisted data")
-void shouldCreateUserWithGeneratedIdAndPersistedData() {
-    User inputUser = Instancio.create(User.class);
+test_should_create_user_with_generated_id():
+    // Arrange
+    inputUser = create_test_user()
     
-    User result = userService.createUser(inputUser);
+    // Act
+    result = userService.createUser(inputUser)
     
-    assertThat(result)
-        .as("Created user should not be null")
-        .isNotNull();
-    assertThat(result.getId())
-        .as("User should have auto-generated ID")
-        .isPositive();
-    assertThat(result.getEmail())
-        .as("User email should match input")
-        .isEqualTo(inputUser.getEmail());
-}
+    // Assert
+    assert_not_null(result, "Created user should not be null")
+    assert_positive(result.id, "User should have auto-generated ID")
+    assert_equal(result.email, inputUser.email, "User email should match input")
 
-// ❌ BAD - Catching exceptions
-@Test
-void testInvalidEmail() {
-    try {
-        userService.createUser(invalidUser);
-        fail("Should have thrown exception");
-    } catch (Exception e) {
-        // Test passes
-    }
-}
+// ❌ BAD - Catching exceptions without verification
+test_invalid_email():
+    try:
+        userService.createUser(invalidUser)
+        fail("Should have thrown exception")
+    catch Exception:
+        // Test passes - but which exception?
 
 // ✅ GOOD - Proper exception assertion
-@Test
-@DisplayName("Should throw ValidationException when email is invalid")
-void shouldThrowValidationExceptionWhenEmailIsInvalid() {
-    User invalidUser = Instancio.of(User.class)
-        .set(field("email"), "invalid-email")
-        .create();
+test_should_throw_validation_error_for_invalid_email():
+    // Arrange
+    invalidUser = create_test_user(email="invalid-email")
     
-    assertThatThrownBy(() -> userService.createUser(invalidUser))
-        .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("Invalid email format");
-}
+    // Act & Assert
+    assert_throws(
+        ValidationException,
+        lambda: userService.createUser(invalidUser),
+        expected_message="Invalid email format"
+    )
 ```
+
+**Principle:** Use descriptive assertions with clear context to make test failures informative.
 
 ### 6. Test Code Smells
 
@@ -330,15 +409,17 @@ Follow this systematic approach when creating any test:
 - Verify interactions when behavior verification is needed
 - Group related assertions when validating same behavior
 
-#### 8. Apply Framework Skills
+#### 8. Coordinate Skills
 
-Apply the following framework skills when testing Java code or Spring-based projects:
+Apply skills from each category based on the target language and framework:
 
-- **JUnit 5**: For test structure, lifecycle, parameterized tests, nested tests
-- **Mockito**: For mocking dependencies, stubbing behavior, verifying interactions
-- **AssertJ**: For all assertions and verifications
-- **Instancio**: For generating test data and fixtures
-- **Pact**: For contract testing between services
+- **Test Framework Skill**: For test structure, lifecycle, parameterized tests, test organization
+- **Mocking Skill**: For creating test doubles, stubbing behavior, verifying interactions
+- **Assertion Skill**: For all verifications and validations
+- **Test Data Generation Skill**: For creating test fixtures and realistic data
+- **Contract Testing Skill**: For API contract verification (when applicable)
+
+**Skill selection is based on the project's language, framework, and existing test infrastructure.**
 
 ### Test Types
 
@@ -353,18 +434,30 @@ Which test type should I write?
 │        └─ ✓ UNIT TEST
 │
 ├─ Testing framework-specific features?
-│  └─ Need Spring context for one layer (controller, repository)?
+│  └─ Need framework context for one layer?
 │     └─ Can mock external dependencies?
-│        └─ ✓ COMPONENT TEST (use @WebMvcTest, @DataJpaTest, etc.)
+│        └─ ✓ COMPONENT TEST
+│           Examples:
+│           - Web layer tests (controllers, routes, handlers)
+│           - Data access layer tests (repositories, DAOs)
+│           - Security/auth layer tests
 │
 ├─ Testing across multiple layers?
-│  └─ Need real infrastructure (database, messaging)?
+│  └─ Need real infrastructure (database, messaging, cache)?
 │     └─ Testing complete workflows?
-│        └─ ✓ INTEGRATION TEST (use @SpringBootTest + Testcontainers)
+│        └─ ✓ INTEGRATION TEST
+│           Examples:
+│           - Full application with real database
+│           - End-to-end API workflows
+│           - Multi-service interactions
 │
 └─ Testing API contracts between services?
    └─ Need to verify consumer-provider compatibility?
-      └─ ✓ CONTRACT TEST (use Pact)
+      └─ ✓ CONTRACT TEST
+          Examples:
+          - REST API contracts
+          - GraphQL schema contracts
+          - Message queue contracts
 ```
 
 **Detailed criteria:**
@@ -381,13 +474,14 @@ Which test type should I write?
 
 - Testing a specific layer in isolation
 - Need framework context but not full application
-- Testing framework-specific functionality (e.g., Spring MVC controllers, JPA repositories)
+- Testing framework-specific functionality
 - Can isolate some dependencies but need framework infrastructure
 
-**Examples:**
-- Testing a REST controller with `@WebMvcTest` (mocked service layer)
-- Testing a JPA repository with `@DataJpaTest` (real database via H2/Testcontainers)
-- Testing security configuration with `@WebSecurityTest`
+**Examples across languages:**
+- **Web layer**: Testing HTTP handlers, controllers, routes (with mocked service layer)
+- **Data layer**: Testing repository/DAO patterns (with test database or mocks)
+- **Security layer**: Testing authentication/authorization logic
+- **Messaging layer**: Testing message handlers or event listeners
 
 **Integration Test** - Write when:
 
@@ -396,10 +490,11 @@ Which test type should I write?
 - Testing complete workflows across layers
 - Verifying component integration and data flow
 
-**Examples:**
-- Testing complete user registration workflow (controller → service → repository → database)
-- Testing event publishing and consumption across services
-- Testing API endpoint with authentication and database persistence
+**Examples across languages:**
+- Complete workflows (e.g., user registration: handler → service → repository → database)
+- Event-driven flows (publishing and consuming messages)
+- API endpoints with authentication and persistence
+- Multi-service interactions
 
 **Contract Test** - Write when:
 
@@ -409,56 +504,53 @@ Which test type should I write?
 - Enabling independent service deployment
 - Testing communication protocol contracts
 
-**Examples:**
-- Testing that Order Service correctly calls Payment Service API
-- Verifying API backward compatibility across service versions
-- Testing GraphQL schema contracts between frontend and backend
+**Examples across languages:**
+- REST API contracts between microservices
+- GraphQL schema contracts
+- Message queue contract verification
+- gRPC service contracts
 
 ### Unit Test Guide
 
 **Step-by-step approach:**
 
-1. **Set up test class** with testing framework and configure dependency injection
-2. **Generate test data** using test data generators with appropriate customization
-3. **Configure test doubles** by setting up expected behavior and return values
+1. **Set up test class** using the test framework skill for structure and lifecycle
+2. **Generate test data** using the test data generation skill with appropriate customization
+3. **Configure test doubles** using the mocking skill to set up expected behavior
 4. **Execute operation** under test and capture results
-5. **Verify outcomes** using assertion library with descriptive messages
-6. **Verify interactions** when behavior verification is important for the test
+5. **Verify outcomes** using the assertion skill with descriptive messages
+6. **Verify interactions** using the mocking skill when behavior verification is needed
 
-**Skills used in unit tests:**
-- ✓ **JUnit 5**: `@Test`, `@BeforeEach`, `@DisplayName`, `@ParameterizedTest`
-- ✓ **Mockito**: `@Mock`, `@InjectMocks`, `when().thenReturn()`, `verify()`
-- ✓ **AssertJ**: `assertThat()` for all assertions
-- ✓ **Instancio**: `Instancio.create()` for generating test data
+**Skills coordination:**
+- **Test Framework Skill**: Test structure, lifecycle hooks, test method declarations
+- **Mocking Skill**: Create mocks/stubs, configure behavior, verify interactions
+- **Assertion Skill**: All outcome verifications
+- **Test Data Generation Skill**: Create test fixtures and input data
 
-**Example structure:**
+**Example structure (language-agnostic pseudocode):**
 
-```java
-@ExtendWith(MockitoExtension.class)
-class UserServiceTest {
+```
+test_class UserServiceTest:
+    // Dependencies (mocked)
+    mock userRepository
     
-    @Mock
-    private UserRepository userRepository;
+    // System under test (with injected mocks)
+    userService = new UserService(userRepository)
     
-    @InjectMocks
-    private UserService userService;
-    
-    @Test
-    @DisplayName("Should create user when valid data provided")
-    void shouldCreateUserWhenValidDataProvided() {
-        // Arrange
-        User user = Instancio.create(User.class);
-        when(userRepository.save(any(User.class))).thenReturn(user);
+    test_should_create_user_when_valid_data_provided():
+        // Arrange - using Test Data Generation Skill
+        user = generate_test_user()
+        configure_mock(userRepository.save, returns=user)
         
         // Act
-        User result = userService.createUser(user);
+        result = userService.createUser(user)
         
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(user.getId());
-        verify(userRepository).save(user);
-    }
-}
+        // Assert - using Assertion Skill
+        assert_not_null(result)
+        assert_equal(result.id, user.id)
+        
+        // Verify - using Mocking Skill
+        verify_called(userRepository.save, with=user)
 ```
 
 **Best practices:**
@@ -474,44 +566,40 @@ class UserServiceTest {
 
 **Step-by-step approach:**
 
-1. **Choose appropriate test utilities** provided by framework for specific layers
-2. **Generate test data** with realistic values for the test scenario
-3. **Configure test behavior** by setting up dependencies and test-specific data
+1. **Choose appropriate test utilities** provided by the framework for specific layers
+2. **Generate test data** using test data generation skill
+3. **Configure test behavior** by setting up dependencies and test-specific configuration
 4. **Execute through component interface** using framework test utilities
-5. **Verify results** using assertions appropriate for the component type
+5. **Verify results** using assertion skill
 
-**Skills used in component tests:**
-- ✓ **JUnit 5**: `@Test`, `@DisplayName`, test structure
-- ✓ **Mockito**: `@MockBean` for Spring beans (when using Spring test slices)
-- ✓ **AssertJ**: `assertThat()` for all assertions
-- ✓ **Instancio**: `Instancio.create()` for generating request/response objects
+**Skills coordination:**
+- **Test Framework Skill**: Framework-specific test setup and utilities
+- **Mocking Skill**: Mock dependencies outside the component layer
+- **Assertion Skill**: Verify component behavior and responses
+- **Test Data Generation Skill**: Create request/response objects
 
-**Example - Testing a REST Controller:**
+**Example - Testing a web layer component:**
 
-```java
-@WebMvcTest(UserController.class)
-class UserControllerTest {
+```
+test_class UserControllerTest:
+    // Framework-provided test utilities
+    http_client = framework_test_client()
     
-    @Autowired
-    private MockMvc mockMvc;
+    // Mocked dependencies
+    mock userService
     
-    @MockBean
-    private UserService userService;
-    
-    @Test
-    @DisplayName("Should return user when valid ID provided")
-    void shouldReturnUserWhenValidIdProvided() throws Exception {
-        // Arrange
-        User user = Instancio.create(User.class);
-        when(userService.getUserById(1L)).thenReturn(user);
+    test_should_return_user_when_valid_id_provided():
+        // Arrange - using Test Data Generation Skill
+        user = generate_test_user(id=1)
+        configure_mock(userService.getUserById, with_arg=1, returns=user)
         
-        // Act & Assert
-        mockMvc.perform(get("/api/users/1"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.id").value(user.getId()))
-            .andExpect(jsonPath("$.name").value(user.getName()));
-    }
-}
+        // Act - using framework test client
+        response = http_client.get("/api/users/1")
+        
+        // Assert - using Assertion Skill
+        assert_status_code(response, 200)
+        assert_equal(response.body.id, user.id)
+        assert_equal(response.body.name, user.name)
 ```
 
 **Best practices:**
@@ -528,59 +616,48 @@ class UserControllerTest {
 **Step-by-step approach:**
 
 1. **Set up test environment** with real infrastructure using containers or test utilities
-2. **Prepare test data** for the complete workflow scenario
+2. **Prepare test data** using test data generation skill
 3. **Execute complete workflow** across multiple components
 4. **Verify end-to-end results** including data persistence and transformations
 
-**Skills used in integration tests:**
-- ✓ **JUnit 5**: `@Test`, `@DisplayName`, `@BeforeEach` for setup
-- ✓ **AssertJ**: `assertThat()` for all assertions
-- ✓ **Instancio**: `Instancio.create()` for generating test data
+**Skills coordination:**
+- **Test Framework Skill**: Test structure, lifecycle, setup/teardown
+- **Assertion Skill**: Verify complete workflow outcomes
+- **Test Data Generation Skill**: Create workflow input data
+- (Mocking typically not used in integration tests - use real dependencies)
 
 **Example - Testing complete workflow:**
 
-```java
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Testcontainers
-class UserRegistrationIntegrationTest {
+```
+test_class UserRegistrationIntegrationTest:
+    // Real infrastructure (database container)
+    database = start_test_database_container()
     
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    // Application with real dependencies
+    app = start_application(database_url=database.url)
+    http_client = create_http_client(app.url)
     
-    @Autowired
-    private TestRestTemplate restTemplate;
+    setup_before_each_test():
+        database.clear_all_data()
     
-    @Autowired
-    private UserRepository userRepository;
-    
-    @BeforeEach
-    void setUp() {
-        userRepository.deleteAll();
-    }
-    
-    @Test
-    @DisplayName("Should register user and persist to database")
-    void shouldRegisterUserAndPersistToDatabase() {
-        // Arrange
-        UserRegistrationRequest request = Instancio.create(UserRegistrationRequest.class);
+    test_should_register_user_and_persist_to_database():
+        // Arrange - using Test Data Generation Skill
+        request = generate_registration_request(
+            email="test@example.com",
+            name="Test User"
+        )
         
-        // Act
-        ResponseEntity<UserResponse> response = restTemplate.postForEntity(
-            "/api/users/register", 
-            request, 
-            UserResponse.class
-        );
+        // Act - execute through HTTP
+        response = http_client.post("/api/users/register", body=request)
         
-        // Assert
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).isNotNull();
+        // Assert - using Assertion Skill
+        assert_status_code(response, 201)
+        assert_not_null(response.body)
         
         // Verify database persistence
-        User savedUser = userRepository.findByEmail(request.getEmail()).orElseThrow();
-        assertThat(savedUser.getEmail()).isEqualTo(request.getEmail());
-        assertThat(savedUser.getName()).isEqualTo(request.getName());
-    }
-}
+        saved_user = database.query("SELECT * FROM users WHERE email = ?", request.email)
+        assert_equal(saved_user.email, request.email)
+        assert_equal(saved_user.name, request.name)
 ```
 
 **Best practices:**
@@ -626,28 +703,54 @@ After creating or modifying tests, follow these steps to execute and validate th
 
 ### Running Tests
 
+**The specific commands depend on your language and build tool:**
+
 **Run individual test method:**
 ```bash
-./mvnw test -Dtest=UserServiceTest#shouldCreateUserWhenValidDataProvided
+# Examples by language/tool:
+# Java (Maven): ./mvnw test -Dtest=ClassName#methodName
+# Java (Gradle): ./gradlew test --tests ClassName.methodName
+# JavaScript (npm): npm test -- --testNamePattern="test name"
+# Python (pytest): pytest path/to/test_file.py::test_function_name
+# C# (dotnet): dotnet test --filter "FullyQualifiedName=Namespace.ClassName.MethodName"
+# Go: go test -run TestFunctionName
+# Ruby (RSpec): rspec spec/path/to/spec_file.rb:line_number
 ```
 
-**Run entire test class:**
+**Run entire test class/file:**
 ```bash
-./mvnw test -Dtest=UserServiceTest
+# Examples by language/tool:
+# Java (Maven): ./mvnw test -Dtest=ClassName
+# Java (Gradle): ./gradlew test --tests ClassName
+# JavaScript (npm): npm test path/to/test.file.js
+# Python (pytest): pytest path/to/test_file.py
+# C# (dotnet): dotnet test --filter "FullyQualifiedName~Namespace.ClassName"
+# Go: go test -run "TestClassName"
+# Ruby (RSpec): rspec spec/path/to/spec_file.rb
 ```
 
-**Run tests by type (using tags):**
+**Run tests by category/tag:**
 ```bash
-# Run only unit tests
-./mvnw test -Dgroups="unit"
-
-# Run only integration tests
-./mvnw test -Dgroups="integration"
+# Examples by language/tool:
+# Java (Maven): ./mvnw test -Dgroups="unit"
+# Java (Gradle): ./gradlew test --tests "*" --include-tags "unit"
+# JavaScript (Jest): npm test -- --testPathPattern="unit"
+# Python (pytest): pytest -m unit
+# C# (dotnet): dotnet test --filter "Category=Unit"
+# Go: go test -tags=unit
+# Ruby (RSpec): rspec --tag unit
 ```
 
 **Run all tests:**
 ```bash
-./mvnw test
+# Examples by language/tool:
+# Java (Maven): ./mvnw test
+# Java (Gradle): ./gradlew test
+# JavaScript (npm): npm test
+# Python (pytest): pytest
+# C# (dotnet): dotnet test
+# Go: go test ./...
+# Ruby (RSpec): rspec
 ```
 
 ### Interpreting Test Results
@@ -677,20 +780,23 @@ After creating or modifying tests, follow these steps to execute and validate th
 **Unit tests should be fast:**
 - Target: < 100ms per test
 - If slower, check for unnecessary initialization or external calls
+- Use mocks instead of real dependencies
 
 **Integration tests can be slower:**
 - Target: < 5 seconds per test
-- Use `@Tag("integration")` to separate from fast tests
+- Separate from fast tests using tags/categories
 - Consider parallel execution for test suites
+- Use real infrastructure only when necessary
 
-**Use appropriate annotations:**
-```java
-@Tag("unit")
-class UserServiceTest { }
-
-@Tag("integration")
-@SpringBootTest
-class UserRegistrationIntegrationTest { }
+**Organize tests by speed using tags/markers:**
+```
+# Language-specific examples:
+# Java: @Tag("unit"), @Tag("integration")
+# JavaScript (Jest): describe.each(['unit'])
+# Python (pytest): @pytest.mark.unit, @pytest.mark.integration
+# C#: [Category("Unit")], [Category("Integration")]
+# Go: build tags // +build unit
+# Ruby (RSpec): RSpec.describe "...", :unit do
 ```
 
 ## Test Organization
@@ -701,80 +807,171 @@ Follow these conventions for organizing test code:
 
 **Mirror production structure:**
 ```
+# Examples by language:
+# Java:
 src/main/java/com/example/service/UserService.java
 src/test/java/com/example/service/UserServiceTest.java
+
+# JavaScript/TypeScript:
+src/services/UserService.ts
+src/services/UserService.test.ts (or __tests__/UserService.test.ts)
+
+# Python:
+src/services/user_service.py
+tests/services/test_user_service.py
+
+# C#:
+src/Services/UserService.cs
+tests/Services/UserServiceTests.cs
+
+# Go:
+pkg/services/user_service.go
+pkg/services/user_service_test.go
+
+# Ruby:
+lib/services/user_service.rb
+spec/services/user_service_spec.rb
 ```
 
-**Naming conventions:**
-- Unit tests: `*Test.java` (e.g., `UserServiceTest.java`)
-- Integration tests: `*IT.java` or `*IntegrationTest.java`
-- Contract tests: `*ContractTest.java`
+**Naming conventions (adapt to language idioms):**
+- Unit tests: Follow language conventions (e.g., `*Test`, `*_test`, `*Spec`, `*.test.*`)
+- Integration tests: Add suffix/marker (e.g., `*IT`, `*IntegrationTest`, `*_integration_test`)
+- Contract tests: Add suffix/marker (e.g., `*ContractTest`, `*_contract_test`)
 
 ### Test Resources
 
-**Organize test resources separately:**
+**Organize test resources separately (language-specific structure):**
 ```
+# Examples by language:
+
+# Java:
 src/test/resources/
-├── application-test.yml          # Test-specific configuration
-├── data/
-│   ├── test-users.json          # Test data files
-│   └── expected-responses.json
-└── contracts/                    # Pact contract files
+├── application-test.yml
+├── data/test-users.json
+└── contracts/
+
+# JavaScript:
+test/fixtures/
+├── test-config.json
+├── test-data/
+└── contracts/
+
+# Python:
+tests/fixtures/
+├── test_config.yaml
+├── test_data/
+└── contracts/
+
+# C#:
+tests/TestData/
+├── appsettings.test.json
+├── Fixtures/
+└── Contracts/
+
+# Go:
+testdata/
+├── config.json
+├── fixtures/
+└── contracts/
 ```
 
-### Test Categorization with Tags
+### Test Categorization with Tags/Markers
 
-**Use `@Tag` for flexible test execution:**
+**Use language-appropriate tagging mechanisms:**
 
-```java
+```
+# Examples by language/framework:
+
+# Java (JUnit 5):
 @Tag("unit")
 @Tag("service-layer")
 class UserServiceTest { }
 
-@Tag("integration")
-@Tag("database")
-@SpringBootTest
-class UserRepositoryIntegrationTest { }
+# JavaScript (Jest):
+describe('UserService', () => {
+  test.concurrent.only.failing('...', () => {});
+});
+// Or use test.todo(), test.skip()
 
-@Tag("contract")
-@Tag("external-api")
-class PaymentServiceContractTest { }
+# Python (pytest):
+@pytest.mark.unit
+@pytest.mark.service_layer
+class TestUserService:
+    pass
+
+# C#:
+[Category("Unit")]
+[Category("ServiceLayer")]
+public class UserServiceTests { }
+
+# Go:
+// +build unit
+// Build tags at file level
+
+# Ruby (RSpec):
+RSpec.describe UserService, :unit, :service_layer do
+end
 ```
 
-**Run specific categories:**
+**Run specific categories (examples):**
 ```bash
-./mvnw test -Dgroups="unit"
-./mvnw test -Dgroups="integration"
-./mvnw test -Dgroups="unit & service-layer"
+# Java: ./mvnw test -Dgroups="unit"
+# JavaScript: npm test -- --testPathPattern=unit
+# Python: pytest -m unit
+# C#: dotnet test --filter "Category=Unit"
+# Go: go test -tags=unit ./...
+# Ruby: rspec --tag unit
 ```
 
 ### Test Class Organization
 
-**Group related tests with `@Nested`:**
+**Group related tests (language-specific patterns):**
 
-```java
+```
+# Examples:
+
+# Java (JUnit 5 @Nested):
 class UserServiceTest {
-    
     @Nested
-    @DisplayName("User Creation Tests")
     class UserCreationTests {
-        @Test
-        void shouldCreateUserWithValidData() { }
-        
-        @Test
-        void shouldThrowExceptionWhenEmailInvalid() { }
-    }
-    
-    @Nested
-    @DisplayName("User Update Tests")
-    class UserUpdateTests {
-        @Test
-        void shouldUpdateUserWhenExists() { }
-        
-        @Test
-        void shouldThrowExceptionWhenUserNotFound() { }
+        @Test void shouldCreateUser() { }
     }
 }
+
+# JavaScript (describe blocks):
+describe('UserService', () => {
+    describe('User Creation', () => {
+        test('should create user', () => {});
+    });
+});
+
+# Python (pytest classes):
+class TestUserService:
+    class TestUserCreation:
+        def test_should_create_user(self): pass
+
+# C# (nested classes):
+public class UserServiceTests {
+    public class UserCreationTests {
+        [Fact]
+        public void ShouldCreateUser() { }
+    }
+}
+
+# Go (subtests):
+func TestUserService(t *testing.T) {
+    t.Run("UserCreation", func(t *testing.T) {
+        t.Run("ShouldCreateUser", func(t *testing.T) {})
+    })
+}
+
+# Ruby (RSpec nested describe):
+RSpec.describe UserService do
+    describe 'User Creation' do
+        it 'should create user' do
+        end
+    end
+end
 ```
 
 ## Additional Guidelines
@@ -802,31 +999,30 @@ class UserServiceTest {
 
 ### Mock Not Being Injected
 
-**Symptoms:** NullPointerException when calling mocked dependencies
+**Symptoms:** Null reference errors when calling mocked dependencies
 
-**Solutions:**
-- Ensure class has `@ExtendWith(MockitoExtension.class)`
-- Verify `@Mock` annotation on dependencies
-- Verify `@InjectMocks` annotation on class under test
-- Check that the class under test has a constructor or fields that can be injected
-- Ensure mock field names match the dependency names in the class under test
+**Common causes and solutions:**
+- **Missing framework setup**: Ensure test class uses proper mocking framework initialization
+- **Missing mock declaration**: Verify mocks are properly declared/created
+- **Missing injection configuration**: Ensure the system under test is configured to receive mocks
+- **Constructor/dependency mismatch**: Check that dependencies can be injected properly
+- **Name mismatch**: Ensure mock names match expected dependency names (when using name-based injection)
 
-**Example:**
-```java
-@ExtendWith(MockitoExtension.class)  // ✓ Required for mock initialization
-class UserServiceTest {
+**General pattern (adapt to your language):**
+```
+test_class UserServiceTest:
+    // Framework initialization (if required)
+    setup_mocking_framework()
     
-    @Mock  // ✓ Creates mock
-    private UserRepository userRepository;
+    // Mock declaration
+    mock userRepository
     
-    @InjectMocks  // ✓ Injects mocks into UserService
-    private UserService userService;
+    // System under test with injected mocks
+    userService = new UserService(userRepository)  // or use framework injection
     
-    @Test
-    void test() {
-        // userRepository is now properly injected into userService
-    }
-}
+    test_example():
+        // userRepository is now properly available
+        configure_mock(userRepository.save, returns=...)
 ```
 
 ### Tests Pass Locally But Fail in CI
@@ -834,27 +1030,27 @@ class UserServiceTest {
 **Symptoms:** Tests succeed on local machine but fail in CI pipeline
 
 **Common causes and solutions:**
-- **Shared state between tests**: Ensure `@BeforeEach` properly cleans up state
-- **Timing issues**: Use proper await mechanisms instead of `Thread.sleep()`
-- **Environment differences**: Use Testcontainers for consistent infrastructure
+- **Shared state between tests**: Ensure setup/teardown properly cleans up state
+- **Timing issues**: Use proper await/polling mechanisms instead of fixed sleep delays
+- **Environment differences**: Use containerization or consistent test infrastructure
 - **Test execution order**: Tests should not depend on execution order
-- **Random data**: Use `Instancio` with fixed seeds for reproducibility
+- **Random data**: Use controlled randomization with fixed seeds
+- **File system differences**: Use temp directories and handle path separators correctly
+- **Timezone/locale differences**: Use UTC and locale-independent comparisons
 
-**Example fix:**
-```java
-@BeforeEach
-void setUp() {
+**Example fix pattern:**
+```
+setup_before_each_test():
     // ✓ Clean state before each test
-    userRepository.deleteAll();
-}
+    clear_database()
+    reset_test_state()
 
-@Test
-void testWithDeterministicData() {
-    // ✓ Use Instancio with constraints for predictable data
-    User user = Instancio.of(User.class)
-        .set(field("email"), "test@example.com")
-        .create();
-}
+test_with_deterministic_data():
+    // ✓ Use controlled data generation
+    user = generate_test_user(
+        seed=12345,  // Fixed seed for reproducibility
+        email="test@example.com"
+    )
 ```
 
 ### Flaky Tests
@@ -862,44 +1058,37 @@ void testWithDeterministicData() {
 **Symptoms:** Tests randomly fail and succeed without code changes
 
 **Common causes and solutions:**
-- **Timing issues**: Use proper synchronization mechanisms
+- **Timing issues**: Use proper synchronization/polling instead of fixed delays
 - **Uncontrolled randomness**: Use fixed seeds or controlled data generation
-- **Shared mutable state**: Ensure test isolation
+- **Shared mutable state**: Ensure proper test isolation and cleanup
 - **External dependencies**: Use mocks or test doubles instead of real services
-- **Incorrect assertions on collections**: Use order-independent assertions
+- **Collection ordering**: Use order-independent assertions
+- **Concurrency issues**: Properly synchronize access to shared resources in tests
 
 **Example fixes:**
-```java
-// ❌ BAD - Timing assumption
-@Test
-void testAsyncOperation() throws Exception {
-    service.startAsyncOperation();
-    Thread.sleep(1000);  // Brittle!
-    assertTrue(service.isComplete());
-}
+```
+// ❌ BAD - Timing assumption with fixed delay
+test_async_operation():
+    service.startAsyncOperation()
+    sleep(1000)  // Brittle! May be too short or too long
+    assert_true(service.isComplete())
 
-// ✅ GOOD - Proper waiting mechanism
-@Test
-void testAsyncOperation() {
-    service.startAsyncOperation();
-    await().atMost(5, SECONDS).until(() -> service.isComplete());
-}
+// ✅ GOOD - Proper waiting mechanism with timeout
+test_async_operation():
+    service.startAsyncOperation()
+    wait_until(timeout=5_seconds, condition=lambda: service.isComplete())
 
 // ❌ BAD - Order-dependent assertion
-@Test
-void testGetUsers() {
-    List<User> users = service.getUsers();
-    assertEquals(users.get(0).getName(), "Alice");  // Fails if order changes
-}
+test_get_users():
+    users = service.getUsers()
+    assert_equal(users[0].name, "Alice")  // Fails if order changes
 
 // ✅ GOOD - Order-independent assertion
-@Test
-void testGetUsers() {
-    List<User> users = service.getUsers();
-    assertThat(users)
-        .extracting(User::getName)
-        .containsExactlyInAnyOrder("Alice", "Bob", "Charlie");
-}
+test_get_users():
+    users = service.getUsers()
+    user_names = [u.name for u in users]
+    assert_contains_all(user_names, ["Alice", "Bob", "Charlie"])
+    // Or: assert_contains_in_any_order(user_names, ["Alice", "Bob", "Charlie"])
 ```
 
 ### Slow Tests
@@ -907,27 +1096,28 @@ void testGetUsers() {
 **Symptoms:** Test execution takes too long, slowing down development
 
 **Common causes and solutions:**
-- **Unnecessary `@SpringBootTest`**: Use test slices (`@WebMvcTest`, `@DataJpaTest`) instead
-- **Real database in unit tests**: Use mocks instead of real database
-- **Starting unnecessary infrastructure**: Mock external services
-- **Inefficient test data creation**: Use Instancio for efficient object creation
-- **Not using test parallelization**: Configure Maven/Gradle for parallel execution
+- **Full application startup in unit tests**: Use lightweight test configurations
+- **Real infrastructure in unit tests**: Use mocks for databases, APIs, external services
+- **Starting unnecessary services**: Mock or stub dependencies not under test
+- **Inefficient test data creation**: Use test data generators
+- **Sequential test execution**: Configure parallel execution when safe
+- **Excessive setup/teardown**: Optimize or share expensive setup when appropriate
 
 **Example fixes:**
-```java
-// ❌ BAD - Full application context for controller test (slow)
-@SpringBootTest
-class UserControllerTest {
-    // Starts entire application
-}
+```
+// ❌ BAD - Full application context for unit test (slow)
+test_class UserControllerTest:
+    app = start_full_application()  // Starts entire application stack
+    
+    test_get_user():
+        // Testing controller but loading everything
 
-// ✅ GOOD - Test slice for controller test (fast)
-@WebMvcTest(UserController.class)
-class UserControllerTest {
-    // Only starts web layer
-    @MockBean
-    private UserService userService;  // Mock the service layer
-}
+// ✅ GOOD - Lightweight test configuration (fast)
+test_class UserControllerTest:
+    controller = UserController(mock_user_service)  // Only controller layer
+    
+    test_get_user():
+        // Fast, focused test
 
 // ❌ BAD - Real database for unit test (slow)
 @SpringBootTest
@@ -937,64 +1127,66 @@ class UserServiceTest {
     
     @Autowired
     private UserRepository userRepository;  // Real database
-}
+        // Fast, focused test
+
+// ❌ BAD - Real database in unit test (slow)
+test_class UserServiceTest:
+    database = connect_to_real_database()  // Slow startup and I/O
+    userService = new UserService(database)
 
 // ✅ GOOD - Mocked repository for unit test (fast)
-@ExtendWith(MockitoExtension.class)
-class UserServiceTest {
-    @Mock
-    private UserRepository userRepository;  // Mocked dependency
-    
-    @InjectMocks
-    private UserService userService;
-}
+test_class UserServiceTest:
+    mock userRepository  // Fast, in-memory
+    userService = new UserService(userRepository)
 ```
 
 ### Assertion Failures with Unclear Messages
 
 **Symptoms:** Test fails but the error message doesn't explain what went wrong
 
-**Solution:** Use AssertJ with descriptive messages and specific assertions
+**Solution:** Use assertion library with descriptive messages and specific assertions
 
 **Example:**
-```java
+```
 // ❌ BAD - Unclear failure message
-@Test
-void testUser() {
-    User user = userService.getUser(1L);
-    assertTrue(user.getAge() >= 18);  // Failure: expected true but was false
-}
+test_user_age():
+    user = userService.getUser(1)
+    assert_true(user.age >= 18)
+    // Failure: "expected true but was false" - not helpful!
 
-// ✅ GOOD - Clear failure message
-@Test
-void testUser() {
-    User user = userService.getUser(1L);
-    assertThat(user.getAge())
-        .as("User must be 18 or older")
-        .isGreaterThanOrEqualTo(18);  // Failure: User must be 18 or older, expected >=18 but was 16
-}
+// ✅ GOOD - Clear failure message with context
+test_user_age():
+    user = userService.getUser(1)
+    assert_greater_than_or_equal(
+        user.age,
+        18,
+        message="User must be 18 or older"
+    )
+    // Failure: "User must be 18 or older: expected >=18 but was 16" - clear!
 ```
 
 ### Cannot Verify Mock Interactions
 
-**Symptoms:** `verify()` fails even though the method was called
+**Symptoms:** Verification fails even though the method was called
 
 **Common causes and solutions:**
-- **Wrong argument matchers**: Ensure consistent matcher usage
-- **Object equality issues**: Use `eq()` for exact matching or `any()` for flexible matching
+- **Argument matcher issues**: Ensure consistent matcher usage (all matchers or all concrete values)
+- **Object equality issues**: Use appropriate matchers for object comparison
 - **Method not actually called**: Debug to confirm execution path
 - **Verification timing**: Ensure verification happens after the actual call
+- **Wrong method signature**: Verify you're checking the right method overload
 
 **Example:**
-```java
+```
 // ❌ BAD - Mixing matchers and concrete values incorrectly
-verify(userRepository).save(1L, any(User.class));  // Fails!
+verify_called(userRepository.save, with_args=[1, any(User)])  // May fail!
 
-// ✅ GOOD - Consistent matcher usage
-verify(userRepository).save(eq(1L), any(User.class));
+// ✅ GOOD - Consistent matcher usage (all matchers)
+verify_called(userRepository.save, with_args=[equals(1), any(User)])
 
 // ✅ ALTERNATIVE - All concrete values
-verify(userRepository).save(1L, expectedUser);
+verify_called(userRepository.save, with_args=[1, expected_user])
+
+// ✅ ANOTHER OPTION - Just verify the call happened
+verify_called(userRepository.save)  // Don't care about arguments
 ```
-
-
